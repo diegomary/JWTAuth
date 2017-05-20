@@ -1,7 +1,7 @@
 //Use nodemon to have your server restart on file changes.
 //Install nodemon using npm install -g nodemon.
 //Then start your server with nodemon server.js.
-
+let http = require('http');
 let express     = require('express');
 let app         = express();
 let bodyParser  = require('body-parser');
@@ -12,11 +12,26 @@ let config = require('./config'); // get our config file
 let User   = require('./model/user'); // get our mongoose model
 let port = process.env.PORT || 3000; // used to create, sign, and verify tokens
 let bcrypt = require('bcrypt');
+var fs = require('fs');
+var https = require('https');
+var options = {
+   key  : fs.readFileSync('server.enc.key'),
+   cert : fs.readFileSync('server.crt')
+};
+let allowCrossDomain = function(req, res, next) {
+    res.header('Access-Control-Allow-Origin', '*');
+    res.header('Access-Control-Allow-Methods', 'GET,PUT,POST,DELETE,OPTIONS');
+    res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, Content-Length, X-Requested-With');
+    // intercept OPTIONS method
+    if ('OPTIONS' == req.method)  res.send(200);
+    else next();
+};
 
 mongoose.connect(config.database);
 // use body parser so we can get info from POST and/or URL parameters
-app.use(bodyParser.urlencoded({ extended: false }));
+app.use(bodyParser.urlencoded({ extended: true }));
 app.use(bodyParser.json());
+app.use(allowCrossDomain); // This API will be fully accessible in yhe internet (CORS)
 // use morgan to log requests to the console
 app.use(morgan('dev'));
 app.get('/', function(req, res) {
@@ -25,9 +40,9 @@ app.get('/', function(req, res) {
 // Here we create an user
 app.get('/setup', function(req, res) {
   // create a sample user
-  bcrypt.hash('password', 10, function(err, hash) {
+  bcrypt.hash('admin', 10, function(err, hash) {
     var diego = new User({
-      name: 'Diego Burlando',
+      name: 'admin',
       password: hash,
       admin: true
     });
@@ -69,7 +84,7 @@ apiRoutes.post('/authenticate', function(req, res) {
              });
              res.json({
                        success: true,
-                       message: 'Enjoy your token!',
+                       message: 'JWT token created and signed!',
                        token: token
                      });
    })
@@ -141,6 +156,8 @@ apiRoutes.post('/createuser',function(req,res){
    })
 })
 app.use('/api', apiRoutes);
-app.listen(port);
 
-console.log('Server express running at http://localhost:' + port);
+let server = https.createServer(options,app).listen(process.env.NODE_PORT || 3000,process.env.NODE_IP || 'localhost', function () {
+  console.log('Server express running at. ' + server.address().address +':'+ server.address().port + ' ' );
+  console.log(`Application worker ${process.pid} started...`);
+});
